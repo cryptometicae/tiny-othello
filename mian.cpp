@@ -5,7 +5,7 @@
 #include <iostream>
 #include <cstdlib>
 
-static const std::size_t width = 8, height = 8;
+static const std::size_t width = 10, height = 10;
 
 struct hand{
     unsigned int x = std::numeric_limits<unsigned int>::max(), y = std::numeric_limits<unsigned int>::max();
@@ -41,24 +41,22 @@ struct state3_stage{
     // この盤面でのredの適した手.
     hand opt_hand;
 
+    state3_stage *cache;
+
     // 先手が打つ.
     void apply_red(){
-        for(const auto &i : subtree){
-            if(i.first.x == opt_hand.x && i.first.y == opt_hand.y){
-                for(int a = 0; a < table_size; ++a){
-                    bit_table[a] = i.second.bit_table[a];
-                }
-                stone_count = i.second.stone_count;
-                {
-                    auto tmp = std::move(i.second.subtree);
-                    subtree = tmp;
-                }
-                avail = i.second.avail;
-                red = i.second.red;
-                opt_hand = i.second.opt_hand;
-                break;
-            }
+        for(int a = 0; a < table_size; ++a){
+            bit_table[a] = cache->bit_table[a];
         }
+        stone_count = cache->stone_count;
+        {
+            auto tmp = std::move(cache->subtree);
+            subtree = tmp;
+        }
+        avail = cache->avail;
+        red = cache->red;
+        opt_hand = cache->opt_hand;
+        cache = nullptr;
     }
 
     // 戦略木を構築する.
@@ -78,25 +76,27 @@ struct state3_stage{
             return;
         }
         int min_max = std::numeric_limits<int>::min();
-        for(const auto &i : subtree){
+        for(auto &i : subtree){
             if(min_max < i.second.avail){
                 min_max = i.second.avail;
                 opt_hand = i.first;
-                avail = evaluation(i.second, reverse(red)) - evaluation(i.second, red);
+                cache = &i.second;
+                avail = i.second.evaluation(reverse(red)) - i.second.evaluation(red);
             }
         }
     };
 
     // 短絡評価.
     void short_evaluation(state side){
-        avail = evaluation(*this, reverse(side)) - evaluation(*this, side);
+        avail = evaluation(reverse(side)) - evaluation(side);
     }
 
-    static int evaluation(const state3_stage &s, state side){
+    // 現在の盤面の評価.
+    int evaluation(state side) const{
         int avail = 0;
         for(unsigned int j = 0; j < height; ++j){
             for(unsigned int i = 0; i < width; ++i){
-                if(s(i, j) == static_cast<int>(side)){
+                if((*this)(i, j) == static_cast<int>(side)){
                     // 次が成り立つ様にする.
                     // 角の石の価値 > 辺の石の価値 > それ以外の配置の石の価値.
                     static const int norm_weight = 1;
@@ -115,7 +115,7 @@ struct state3_stage{
         return avail;
     }
 
-    // 取りうる次の手をsubtreeにリストアップする.
+    // 取りうる次の手をリストアップする.
     std::list<std::pair<hand, state3_stage>> listup_nexthand(state stone) const{
         std::list<std::pair<hand, state3_stage>> list;
         for(unsigned int j = 0; j < height; ++j){
