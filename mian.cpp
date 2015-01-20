@@ -4,6 +4,7 @@
 */
 
 #include <list>
+#include <vector>
 #include <utility>
 #include <limits>
 #include <string>
@@ -25,8 +26,8 @@ struct state3_stage{
         white = 1,
         black = 2
     };
-    
-    static const std::size_t table_size = width * height * 2 / sizeof(unsigned int) + (width * height * 2 % 8 > 0 ? 1 : 0);
+
+    static const std::size_t table_size = width * height * 2 / (sizeof(unsigned int) * 8) + (width * height * 2 % (sizeof(unsigned int) * 8) > 0 ? 1 : 0);
 
     // 盤面の状態をビットテーブルで保存する.
     unsigned int bit_table[table_size];
@@ -48,7 +49,19 @@ struct state3_stage{
 
     state3_stage *cache;
 
-    // 先手が打つ.
+    state3_stage shallow_copy() const{
+        state3_stage r;
+        for(int i = 0; i < table_size; ++i){
+            r.bit_table[i] = bit_table[i];
+        }
+        r.stone_count = stone_count;
+        r.avail = avail;
+        r.red = red;
+        r.opt_hand = opt_hand;
+        return r;
+    }
+
+    // 打つ.
     void apply_red(){
         for(int a = 0; a < table_size; ++a){
             bit_table[a] = cache->bit_table[a];
@@ -70,7 +83,9 @@ struct state3_stage{
             short_evaluation(red);
             return;
         }
-        subtree = listup_nexthand(red);
+        if(subtree.empty()){
+            subtree = listup_nexthand(red);
+        }
         for(auto &i : subtree){
             i.second.red = reverse(red);
             i.second.compute(depth - 1);
@@ -125,7 +140,8 @@ struct state3_stage{
         std::list<std::pair<hand, state3_stage>> list;
         for(unsigned int j = 0; j < height; ++j){
             for(unsigned int i = 0; i < width; ++i){
-                if((*this)(i, j) != static_cast<int>(state::null)){
+                unsigned int t = (*this)(i, j);
+                if(t != static_cast<int>(state::null)){
                     continue;
                 }
                 auto p = test(i, j, stone);
@@ -157,7 +173,7 @@ struct state3_stage{
     std::pair<bool, state3_stage> test(int x, int y, state s) const{
         state r = reverse(s);
         std::size_t count = 0;
-        state3_stage ret_stage = *this;
+        state3_stage ret_stage = shallow_copy();
 
         if(y - 1 >= 0 && (*this)(x, y - 1) == static_cast<int>(r)){
             std::size_t local_count = 0;
@@ -362,21 +378,21 @@ struct state3_stage{
     }
 
     int operator ()(unsigned int x, unsigned int y) const{
-        unsigned int i = (y * height + x) * 2;
-        return (bit_table[i / sizeof(unsigned int)] >> (i % sizeof(unsigned int))) & 3;
+        unsigned int i = (y * width + x) * 2;
+        return (bit_table[i / (sizeof(unsigned int) * 8)] >> (i % (sizeof(unsigned int) * 8))) & 3;
     }
 
     void operator ()(unsigned int x, unsigned int y, unsigned int v){
-        int i = (y * height + x) * 2;
+        int i = (y * width + x) * 2;
         if((v & 1) == 1){
-            bit_table[i / sizeof(unsigned int)] |= (1 << (i % sizeof(unsigned int)));
+            bit_table[i / (sizeof(unsigned int) * 8)] |= (1 << (i % (sizeof(unsigned int) * 8)));
         }else{
-            bit_table[i / sizeof(unsigned int)] &= ~(1 << (i % sizeof(unsigned int)));
+            bit_table[i / (sizeof(unsigned int) * 8)] &= ~(1 << (i % (sizeof(unsigned int) * 8)));
         }
         if(((v >> 1) & 1) == 1){
-            bit_table[(i + 1) / sizeof(unsigned int)] |= (1 << ((i + 1) % sizeof(unsigned int)));
+            bit_table[(i + 1) / (sizeof(unsigned int) * 8)] |= (1 << ((i + 1) % (sizeof(unsigned int) * 8)));
         }else{
-            bit_table[(i + 1) / sizeof(unsigned int)] &= ~(1 << ((i + 1) % sizeof(unsigned int)));
+            bit_table[(i + 1) / (sizeof(unsigned int) * 8)] &= ~(1 << ((i + 1) % (sizeof(unsigned int) * 8)));
         }
     }
 
@@ -476,7 +492,7 @@ void game(){
         auto list = s.listup_nexthand(player_color);
         if(list.empty()){
             ++pass_count;
-            std::cout << "\n>> pass..." << std::endl;
+            std::cout << ">> pass..." << std::endl;
         }else{
             while(true){
                 hand_player_side = coord_in();
@@ -499,8 +515,6 @@ void game(){
         
         std::cout << "\n";
         s.disp();
-        s.subtree.clear();
-        s.red = cpu_color;
         std::cout << "\ncpu: 考え中..." << std::endl;
         s.compute(lookahead);
         if(s.opt_hand.pass()){
@@ -522,13 +536,26 @@ void game(){
             }
         }
     }
+
+    std::cout << "\n";
     std::cout << "player: " << player_side_num << "\n";
-    std::cout << "cpu   : " << cpu_side_num << "\n";
+    std::cout << "cpu   : " << cpu_side_num << "\n\n";
     if(player_side_num > cpu_side_num){
         std::cout << "player win." << std::endl;
     }else{
         std::cout << "cpu win." << std::endl;
     }
+}
+
+state3_stage input_stage(const std::string &str){
+    state3_stage s;
+    for(unsigned int j = 0; j < height; ++j){
+        for(unsigned int i = 0; i < width; ++i){
+            char c = str[j * width + i];
+            s(i, j, static_cast<int>(c == '*' ? state3_stage::state::white : c == '+' ? state3_stage::state::black : state3_stage::state::null));
+        }
+    }
+    return s;
 }
 
 int main(){
