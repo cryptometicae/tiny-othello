@@ -1,3 +1,8 @@
+/*
+    コンパイル環境: CharctorCode = CP932, Compiler = VC++ 12.
+    Copyright (C) 2015, Youichi Minami All Rights Reserved.
+*/
+
 #include <list>
 #include <utility>
 #include <limits>
