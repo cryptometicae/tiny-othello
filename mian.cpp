@@ -429,9 +429,13 @@ hand coord_in(){
     return ret;
 }
 
-void game(int lookahead){
-    std::cout << "先手で打つ = a, 後手で打つ = b." << std::endl;
-    bool player_first = input("ab") == 0;
+void game(){
+    int lookahead = 0;
+    std::cout << "cpu level: [1] = easy, [2] = normal, [3] = hard.\n";
+    lookahead = 2 * (input("123") + 1);
+
+    std::cout << "先手で打つ = [*], 後手で打つ = [+]." << std::endl;
+    bool player_first = input("*+") == 0;
     state3_stage::state player_color, cpu_color;
     if(player_first){
         player_color = state3_stage::state::white;
@@ -439,8 +443,6 @@ void game(int lookahead){
         player_color = state3_stage::state::black;
     }
     cpu_color = state3_stage::reverse(player_color);
-
-    lookahead *= 2;
 
     state3_stage s;
     s(width / 2 - 1, height / 2 - 1, static_cast<int>(state3_stage::state::white));
@@ -525,7 +527,7 @@ void game(int lookahead){
 }
 
 int main(){
-    game(3);
+    game();
     getchar(), getchar();
 
 	return 0;
