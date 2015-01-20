@@ -11,7 +11,7 @@
 #include <iostream>
 #include <cstdlib>
 
-static const std::size_t width = 10, height = 10;
+static const std::size_t width = 8, height = 8;
 
 struct hand{
     unsigned int x = std::numeric_limits<unsigned int>::max(), y = std::numeric_limits<unsigned int>::max();
@@ -516,6 +516,7 @@ void game(){
         std::cout << "\n";
         s.disp();
         std::cout << "\ncpu: 考え中..." << std::endl;
+        s.red = cpu_color;
         s.compute(lookahead);
         if(s.opt_hand.pass()){
             ++pass_count;
