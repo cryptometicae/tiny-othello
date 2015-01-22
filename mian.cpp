@@ -1,10 +1,9 @@
 /*
-    コンパイル環境: CharctorCode = CP932, Compiler = VC++ 12.
+    Compiler = VC++ 12.
     Copyright (C) 2015, Youichi Minami All Rights Reserved.
 */
 
 #include <list>
-#include <vector>
 #include <utility>
 #include <limits>
 #include <string>
@@ -15,6 +14,7 @@ static const std::size_t width = 8, height = 8;
 
 struct hand{
     unsigned int x = std::numeric_limits<unsigned int>::max(), y = std::numeric_limits<unsigned int>::max();
+
     bool pass() const{
         return x == std::numeric_limits<unsigned int>::max() || y ==std::numeric_limits<unsigned int>::max();
     }
@@ -61,6 +61,21 @@ struct state3_stage{
         return r;
     }
 
+    // 枚数をカウント.
+    std::pair<std::size_t, std::size_t> count() const{
+        std::pair<std::size_t, std::size_t> r = std::make_pair(0, 0);
+        for(unsigned int j = 0; j < height; ++j){
+            for(unsigned int i = 0; i < width; ++i){
+                if((*this)(i, j) == static_cast<int>(state::white)){
+                    ++r.first;
+                }else if((*this)(i, j) == static_cast<int>(state::black)){
+                    ++r.second;
+                }
+            }
+        }
+        return r;
+    }
+
     // 打つ.
     void apply_red(){
         for(int a = 0; a < table_size; ++a){
@@ -95,13 +110,13 @@ struct state3_stage{
             opt_hand = hand();
             return;
         }
-        int min_max = std::numeric_limits<int>::min();
+        int min_max = std::numeric_limits<int>::max();
         for(auto &i : subtree){
-            if(min_max < i.second.avail){
+            if(min_max > i.second.avail){
                 min_max = i.second.avail;
                 opt_hand = i.first;
                 cache = &i.second;
-                avail = i.second.evaluation(reverse(red)) - i.second.evaluation(red);
+                avail = i.second.evaluation(red) - i.second.evaluation(reverse(red));
             }
         }
     };
@@ -335,7 +350,7 @@ struct state3_stage{
     }
 
     // 表示する.
-    void disp() const{
+    void disp(state player_color) const{
         auto digit = [](int n){
             int d = 0;
             while(n){
@@ -352,6 +367,7 @@ struct state3_stage{
             std::cout << static_cast<char>('a' + i);
         }
         std::cout << "\n";
+        std::pair<std::size_t, std::size_t> p = count();
         for(unsigned int j = 0; j < height; ++j){
             int space = digit_width_num - digit(j + 1);
             for(int s = 0; s < space; ++s){
@@ -372,6 +388,13 @@ struct state3_stage{
                     std::cout << "+";
                     break;
                 }
+            }
+
+            if(j == 0){
+                std::cout << "    player: " << (player_color == state::white ? p.first : p.second);
+            }
+            if(j == 1){
+                std::cout << "    cpu:    " << (player_color == state::white ? p.second : p.first);
             }
             std::cout << "\n";
         }
@@ -432,7 +455,7 @@ hand coord_in(){
     hand ret;
     std::string a;
     while(true){
-        std::cout << ">> ";
+        std::cout << "\a>> ";
         std::cin >> a;
         if(a[0] >= '0' && a[0] <= '9'){
             std::string sub = get_seq(a, '0', '9');
@@ -442,6 +465,8 @@ hand coord_in(){
             std::string sub = get_seq(a, 'a', 'a' + width);
             ret.x = sub[0] - 'a';
             ret.y = std::atoi(a.substr(sub.size()).c_str()) - 1;
+        }else if(a[0] == '!'){
+            ret = hand();
         }else{
             continue;
         }
@@ -452,8 +477,8 @@ hand coord_in(){
 
 void game(){
     int lookahead = 0;
-    std::cout << "cpu level: [1] = easy, [2] = normal, [3] = hard.\n";
-    lookahead = 2 * (input("123") + 1);
+    std::cout << "cpu level: [1] = easy, [2] = normal, [3] = hard, [4] = boost.\n";
+    lookahead = 2 * (input("1234") + 1);
 
     std::cout << "先手で打つ = [*], 後手で打つ = [+]." << std::endl;
     bool player_first = input("*+") == 0;
@@ -474,7 +499,7 @@ void game(){
     s.red = cpu_color;
 
     if(!player_first){
-        s.disp();
+        s.disp(player_color);
         std::cout << "\ncpu: 考え中..." << std::endl;
         s.compute(lookahead);
         std::cout << "cpu: " << s.opt_hand.y + 1 << static_cast<char>('a' + s.opt_hand.x) << std::endl;
@@ -482,11 +507,14 @@ void game(){
     }
 
     int pass_count = 0;
-    while(s.stone_count < width * height && pass_count < 2){
+    while(pass_count < 2){
         pass_count = 0;
         std::cout << "\n";
-        s.disp();
+        s.disp(player_color);
         std::cout << "\n";
+        if(s.stone_count >= width * height){
+            break;;
+        }
 
         hand hand_player_side;
         auto list = s.listup_nexthand(player_color);
@@ -496,6 +524,13 @@ void game(){
         }else{
             while(true){
                 hand_player_side = coord_in();
+                
+                if(hand_player_side.pass()){
+                    s.red = player_color;
+                    s.compute(lookahead - 2);
+                    hand_player_side = s.opt_hand;
+                }
+
                 bool f = false;
                 for(const auto &i : list){
                     if(i.first.x == hand_player_side.x && i.first.y == hand_player_side.y){
@@ -514,8 +549,13 @@ void game(){
         }
         
         std::cout << "\n";
-        s.disp();
-        std::cout << "\ncpu: 考え中..." << std::endl;
+        s.disp(player_color);
+        std::cout << "\n";
+        if(s.stone_count >= width * height){
+            break;
+        }
+
+        std::cout << "cpu: 考え中..." << std::endl;
         s.red = cpu_color;
         s.compute(lookahead);
         if(s.opt_hand.pass()){
@@ -538,7 +578,6 @@ void game(){
         }
     }
 
-    std::cout << "\n";
     std::cout << "player: " << player_side_num << "\n";
     std::cout << "cpu   : " << cpu_side_num << "\n\n";
     if(player_side_num > cpu_side_num){
